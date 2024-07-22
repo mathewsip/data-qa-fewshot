@@ -7,12 +7,12 @@ from langchain_community.agent_toolkits import create_sql_agent
 from few_shots_for_agent import few_shots_ag
 from langchain_openai import OpenAIEmbeddings
 from langchain.prompts import SemanticSimilarityExampleSelector
-from langchain.vectorstores import Chroma
+# from langchain.vectorstores import Chroma
 import os
 import sqlite3
 
 from langchain.prompts import FewShotPromptTemplate, PromptTemplate
-from langchain import create_sql_agent, SQLDatabaseToolkit
+from langchain import create_sql_agent
 
 
 
