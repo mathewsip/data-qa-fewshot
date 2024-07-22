@@ -13,48 +13,8 @@ import sqlite3
 os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGCHAIN_API_KEY"]
 os.environ["LANGCHAIN_TRACING_V2"] = "true" 
-
-
-
-# Initialize database connection
 db = SQLDatabase.from_uri("sqlite:///Data.db")
 
-st.title("🔎 Natural language question-answering with databases")
-"""
-In this app we're using text-to-SQL AI to convert questions asked in natural language into the SQL queries needed to extract data from a DB to answer them. The app uses multiple technologies including GPT3.5 to generate the SQL queries, Langchain to manage the question-answering process, and OpenAI Embeddings and Chroma to build a database of typical questions and their correct answers to provide examples to the AI, i.e. implementing few-shot prompting to improve accuracy.
-"""
-
-
-tab1, tab2 = st.tabs([":page_facing_up: Agent", ":robot_face: Golden SQL"])
-
-with tab1:
-
-    if "messages" not in st.session_state or st.sidebar.button("Clear message history"):
-        st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you?"}]
-
-    for msg in st.session_state.messages:
-        st.chat_message(msg["role"]).write(msg["content"])
-
-    user_query = st.chat_input(placeholder="Ask me anything!")
-
-    if user_query:
-        st.session_state.messages.append({"role": "user", "content": user_query})
-        st.chat_message("user").write(user_query)
-
-        with st.chat_message("assistant"):
-            st_cb = StreamlitCallbackHandler(st.container())
-            agent = get_fewshot_agent_chain()
-            response = agent.run(user_query, callbacks=[st_cb])
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.write(response)
-
-
-with tab2:
-
-    st.markdown("")
-    st.markdown("**Q&A examples used in this implementation:**")
-    df = pd.DataFrame(few_shots_ag)
-    st.table(df)
 
 
 def get_fewshot_agent_chain(): 
@@ -121,3 +81,48 @@ def get_fewshot_agent_chain():
 
     agent_executor = create_sql_agent(llm, db=db, prompt=full_prompt, agent_type="openai-tools", verbose=True)
     return agent_executor
+
+
+
+
+
+
+
+st.title("🔎 Natural language question-answering with databases")
+"""
+In this app we're using text-to-SQL AI to convert questions asked in natural language into the SQL queries needed to extract data from a DB to answer them. The app uses multiple technologies including GPT3.5 to generate the SQL queries, Langchain to manage the question-answering process, and OpenAI Embeddings and Chroma to build a database of typical questions and their correct answers to provide examples to the AI, i.e. implementing few-shot prompting to improve accuracy.
+"""
+
+
+tab1, tab2 = st.tabs([":page_facing_up: Agent", ":robot_face: Golden SQL"])
+
+with tab1:
+
+    if "messages" not in st.session_state or st.sidebar.button("Clear message history"):
+        st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you?"}]
+
+    for msg in st.session_state.messages:
+        st.chat_message(msg["role"]).write(msg["content"])
+
+    user_query = st.chat_input(placeholder="Ask me anything!")
+
+    if user_query:
+        st.session_state.messages.append({"role": "user", "content": user_query})
+        st.chat_message("user").write(user_query)
+
+        with st.chat_message("assistant"):
+            st_cb = StreamlitCallbackHandler(st.container())
+            agent = get_fewshot_agent_chain()
+            response = agent.run(user_query, callbacks=[st_cb])
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            st.write(response)
+
+
+with tab2:
+
+    st.markdown("")
+    st.markdown("**Q&A examples used in this implementation:**")
+    df = pd.DataFrame(few_shots_ag)
+    st.table(df)
+
+
