@@ -5,6 +5,9 @@ from langchain.callbacks import StreamlitCallbackHandler
 from langchain_openai import ChatOpenAI
 from langchain_community.agent_toolkits import create_sql_agent
 from few_shots_for_agent import few_shots_ag
+from langchain_openai import OpenAIEmbeddings
+from langchain.prompts import SemanticSimilarityExampleSelector
+from langchain.vectorstores import Chroma
 import os
 import sqlite3
 
@@ -24,19 +27,16 @@ def get_fewshot_agent_chain():
     db = SQLDatabase.from_uri("sqlite:///Data.db")
 
     # create few shot prompts, their embeddings and store in Chromadb
-    # embeddings = OpenAIEmbeddings()
+    embeddings = OpenAIEmbeddings()
     
     # create example selector which chooses k= examples to include in the agent's prompt
-    example_selector = few_shots_ag
-
-    
-    # example_selector = SemanticSimilarityExampleSelector.from_examples(
-    #     few_shots_ag,
-    #     embeddings,
-    #     Chroma,
-    #     k=3,
-    #     input_keys=["input"],
-    # )
+    example_selector = SemanticSimilarityExampleSelector.from_examples(
+        few_shots_ag,
+        embeddings,
+        Chroma,
+        k=3,
+        input_keys=["input"],
+    )
 
 
     # Now we can create our FewShotPromptTemplate, which takes our example selector, an example prompt for formatting each example, and a string prefix and suffix to put before and after our formatted examples:
