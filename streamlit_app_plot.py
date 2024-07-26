@@ -1,23 +1,25 @@
 import streamlit as st
-import pandas as pd
 from langchain_community.utilities import SQLDatabase
-from langchain.callbacks import StreamlitCallbackHandler
-from langchain_openai import ChatOpenAI
 from langchain_community.agent_toolkits import create_sql_agent
+from langchain_experimental.agents import create_pandas_dataframe_agent
+from langchain_openai import ChatOpenAI
+from langchain.chains import LLMChain
 from langchain.prompts import FewShotPromptTemplate, PromptTemplate
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder, SystemMessagePromptTemplate
+from langchain.agents import Tool, ZeroShotAgent
+from langchain.agents import AgentExecutor
+from langchain.callbacks import StreamlitCallbackHandler
 import os
-import sqlite3
-from langchain.tools import Tool
-from datetime import datetime
+import matplotlib.pyplot as plt
+import pandas as pd
 
 # Set up environment variables
 os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGCHAIN_API_KEY"]
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 
-
-# ------------------- Create Sidebar Chat ----------------------
+# Initialize the database
+db = SQLDatabase.from_uri("sqlite:///Data.db")
 
 # Increase the default width of the main area by 50%
 st.set_page_config(layout="wide")
@@ -119,41 +121,87 @@ full_prompt = ChatPromptTemplate.from_messages([
     MessagesPlaceholder("agent_scratchpad"),
 ])
 
-# Custom function to get the current date
-def get_current_date():
-    return datetime.now().strftime("%Y-%m-%d")
-
-# Create a tool from the custom function
-date_tool = Tool(
-    name="get_current_date",
-    func=get_current_date,
-    description="Get the current date"
+# Initialize the SQL agent
+llm_sql = ChatOpenAI(model="gpt-4o", temperature=0.2)
+sql_agent = create_sql_agent(
+    llm_sql, 
+    db=db, 
+    prompt=full_prompt,  
+    agent_type="openai-tools", 
+    verbose=False
 )
 
-# Simple test function
-def simple_test_tool():
-    return "Test tool response for Ian"
+# Initialize the LLM for DataFrame agent
+llm_df = ChatOpenAI(model="gpt-4o", temperature=0.2)
 
-# Create a tool from the simple test function
-test_tool_Ian = Tool(
-    name="simple_test_tool",
-    func=simple_test_tool,
-    description="Returns a test response"
+# Example DataFrame (initially empty)
+df = pd.DataFrame()
+
+# Initialize the Pandas DataFrame agent
+df_agent = create_pandas_dataframe_agent(
+    llm_df,
+    df,
+    agent_type="zero-shot-react-description",
+    verbose=True,
+    return_intermediate_steps=False,
+    allow_dangerous_code=True
 )
 
-# Initialize the LLM and create the SQL agent
-llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
-db = SQLDatabase.from_uri("sqlite:///Data.db")
-agent = create_sql_agent(llm, db=db, prompt=full_prompt, tools=[date_tool, test_tool_Ian], agent_type="openai-tools", verbose=False)
+# Define the plotting function
+def plot_dataframe_with_agent(data: pd.DataFrame, x: str, y: str, kind: str = 'line'):
+    # Update the DataFrame in the df_agent
+    df_agent.df = data
+    query = f"Plot the data with x={x} and y={y} as a {kind} plot."
+    return df_agent.run(query)
 
+# Tool for plotting
+plot_tool = Tool(
+    name="plot_dataframe_with_agent",
+    func=plot_dataframe_with_agent,
+    description="Plot the data with the DataFrame agent. Parameters: df (DataFrame), x (str), y (str), kind (str)"
+)
 
-if "messages" not in st.session_state or st.sidebar.button("New Conversation"):
-    st.session_state["messages"] = [{"role": "assistant", "content": "Hi Nithin, how can I help you today?"}]
+# Create a function to coordinate the workflow
+def coordinate_workflow(query: str, x: str, y: str, kind: str = 'line'):
+    # Step 1: Use the SQL agent to get data
+    data = sql_agent.run(query)
+    # Step 2: Plot the data using the plotting tool
+    plot_result = plot_tool.func(data, x, y, kind)
+    return plot_result
+
+# Create a coordinating tool
+coordinating_tool = Tool(
+    name="coordinate_workflow",
+    func=coordinate_workflow,
+    description="Coordinate the workflow between the SQL agent and DataFrame plotting agent."
+)
+
+# Initialize the LLM for the coordinating agent
+llm_coordinator = ChatOpenAI(model="gpt-4o", temperature=0.2)
+
+# Create the LLM Chain for the coordinating agent
+llm_chain = LLMChain(
+    llm=llm_coordinator,
+    prompt=PromptTemplate.from_template("Coordinate the following task:\n{input}")
+)
+
+# Create the ZeroShotAgent for coordination
+coordinator_agent = ZeroShotAgent(
+    llm_chain=llm_chain,
+    tools=[coordinating_tool],
+    verbose=True
+)
+
+# Create the agent executor
+agent_executor = AgentExecutor(agent=coordinator_agent, tools=[coordinating_tool])
+
+if "messages" not in st.session_state or st.sidebar.button("Clear message history"):
+    st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you?"}]
 
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
 
-user_query = st.chat_input(placeholder="Ask me anything!")
+user_query = st.chat_input(placeholder="Ask me anything here!")
 
 if user_query:
     st.session_state.messages.append({"role": "user", "content": user_query})
@@ -163,84 +211,10 @@ if user_query:
         st_cb = StreamlitCallbackHandler(st.container())
         
         # Construct a dictionary with required inputs
-        inputs = {"input": user_query, "agent_scratchpad": ""}
+        inputs = {"query": user_query, "x": "column_x", "y": "column_y", "kind": "line"}
         
-        # Call the agent's run method with the inputs dictionary
-        response = agent.run(callbacks=[st_cb], **inputs)
+        # Call the coordinating agent's run method with the inputs dictionary
+        response = agent_executor.run(callbacks=[st_cb], **inputs)
         
         st.session_state.messages.append({"role": "assistant", "content": response})
         st.write(response)
-
-
-
-
-
-
-# # def get_fewshot_agent_chain(): 
-    
-#     # llm & db setup
-# llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
-#     # db = SQLDatabase.from_uri("sqlite:///Data.db")
-
-#     # # create few shot prompts, their embeddings and store in Chromadb
-#     # embeddings = OpenAIEmbeddings()
-    
-#     # # create example selector which chooses k= examples to include in the agent's prompt
-#     # example_selector = SemanticSimilarityExampleSelector.from_examples(
-#     #     few_shots_ag,
-#     #     embeddings,
-#     #     Chroma,
-#     #     k=3,
-#     #     input_keys=["input"],
-#     # )
-
-
-#     # # Now we can create our FewShotPromptTemplate, which takes our example selector, an example prompt for formatting each example, and a string prefix and suffix to put before and after our formatted examples:
-#     # from langchain_core.prompts import (
-#     #     ChatPromptTemplate,
-#     #     FewShotPromptTemplate,
-#     #     MessagesPlaceholder,
-#     #     PromptTemplate,
-#     #     SystemMessagePromptTemplate,
-#     # )
-
-#     system_prefix = """You are an agent designed to interact with a SQL database.
-#     Given an input question, create a syntactically correct {dialect} query to run, then look at the results of the query and return the answer.
-#     Unless the user specifies a specific number of examples they wish to obtain, always limit your query to at most {top_k} results.
-#     You can order the results by a relevant column to return the most interesting examples in the database.
-#     Never query for all the columns from a specific table, only ask for the relevant columns given the question.
-#     You have access to tools for interacting with the database.
-#     Only use the given tools. Only use the information returned by the tools to construct your final answer.
-#     You MUST double check your query before executing it. If you get an error while executing a query, rewrite the query and try again.
-
-#     DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
-
-#     If the question does not seem related to the database, just return "I don't know" as the answer.
-
-# #     # Here are some examples of user inputs and their corresponding SQL queries:"""
-
-#     # few_shot_prompt = FewShotPromptTemplate(
-#     #     example_selector=example_selector,
-#     #     example_prompt=PromptTemplate.from_template(
-#     #         "User input: {input}\nSQL query: {query}"
-#     #     ),
-#     #     input_variables=["input", "dialect", "top_k"],
-#     #     prefix=system_prefix,
-#     #     suffix="",
-#     # )
-
-#     # # our full prompt should be a chat prompt with a human message template and an agent_scratchpad MessagesPlaceholder.
-#     # full_prompt = ChatPromptTemplate.from_messages(
-#     #     [
-#     #         SystemMessagePromptTemplate(prompt=few_shot_prompt),
-#     #         ("human", "{input}"),
-#     #         MessagesPlaceholder("agent_scratchpad"),
-#     #     ]
-#     # )
-
-#     # agent_executor = create_sql_agent(llm, db=db, prompt=full_prompt, agent_type="openai-tools", verbose=True)
-#     # return agent_executor
-
-
-
-

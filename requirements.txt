@@ -1,6 +1,9 @@
 streamlit
+matplotlib
 langchain
 langchain-community
+langchain-experimental
 langchain-openai
 pysqlite3-binary
 pandas
+tabulate
