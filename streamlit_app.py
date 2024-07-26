@@ -8,6 +8,8 @@ from langchain.prompts import FewShotPromptTemplate, PromptTemplate
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder, SystemMessagePromptTemplate
 import os
 import sqlite3
+from langchain.tools import Tool
+from datetime import datetime
 
 # Set up environment variables
 os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
@@ -90,11 +92,11 @@ few_shot_prompt = FewShotPromptTemplate(
     examples=examples,
     example_prompt=example_prompt,
     # prefix="You are a SQL expert. Given a user input, generate the appropriate SQL query.\nHere are some examples:",
-    prefix="""You are an agent designed to interact with a SQL database. 
-    Given an input question, create a syntactically correct SQLite query to run, then look at the results of the query and return the answer. 
+    prefix="""You are an assitant for process engineers. You are an agent designed to interact with a SQL database or use your tools to return the current date or a test response. 
+    Given an input question about data, create a syntactically correct SQLite query to run, then look at the results of the query and return the answer. 
     You can order the results by a relevant column to return the most interesting examples in the database. 
     Never query for all the columns from a specific table, only ask for the relevant columns given the question.,
-    You have access to tools for interacting with the database.
+    You have access to tools for interacting with the database as well as returning the current date or a test response.
     Only use the given tools. Only use the information returned by the tools to construct your final answer.
     You MUST double check your query before executing it. If you get an error while executing a query, rewrite the query and try again.
 
@@ -105,7 +107,7 @@ few_shot_prompt = FewShotPromptTemplate(
     'Reasons' for downtime and maintenance are provided as Level 2 Reasons in the Maintenance_Data table in the column 'Level2Reason'.
     When asked about Lines or, for example, "L1", the lines you can query are only: ['L01 - C24', 'L02 - C24', 'L03 - C24', 'L03A - C24E', 'L04 - C21', 'L05  - C21', 'L19 - T2 Prima', 'L21 - Twinkle', 'L22 - Twinkle Rental', 'L23 - Twinkle 2', 'L24 - Twinkle 3', 'L35 - Fuso Combo 1', 'L36 - Fuso Combo 2']
 
-    If the question does not seem related to the database, just return "I don't know" as the answer. \nHere are some examples:""",
+    If the question does not seem related to the database, the current date or time, or a test_tool, just return "I don't know" as the answer. \nHere are some examples:""",
     suffix="User input: {input}\nSQL query: {agent_scratchpad}\n",
     input_variables=["input", "agent_scratchpad"]
 )
@@ -117,10 +119,32 @@ full_prompt = ChatPromptTemplate.from_messages([
     MessagesPlaceholder("agent_scratchpad"),
 ])
 
+# Custom function to get the current date
+def get_current_date():
+    return datetime.now().strftime("%Y-%m-%d")
+
+# Create a tool from the custom function
+date_tool = Tool(
+    name="get_current_date",
+    func=get_current_date,
+    description="Get the current date"
+)
+
+# Simple test function
+def simple_test_tool():
+    return "Test tool response for Ian"
+
+# Create a tool from the simple test function
+test_tool = Tool(
+    name="simple_test_tool",
+    func=simple_test_tool,
+    description="Returns a test response"
+)
+
 # Initialize the LLM and create the SQL agent
 llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 db = SQLDatabase.from_uri("sqlite:///Data.db")
-agent = create_sql_agent(llm, db=db, prompt=full_prompt, agent_type="openai-tools", verbose=False)
+agent = create_sql_agent(llm, db=db, prompt=full_prompt, tools=[date_tool, test_tool], agent_type="openai-tools", verbose=False)
 
 
 if "messages" not in st.session_state or st.sidebar.button("New Conversation"):
