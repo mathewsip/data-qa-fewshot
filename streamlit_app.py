@@ -22,6 +22,7 @@ os.environ["LANGCHAIN_TRACING_V2"] = "true"
 # Increase the default width of the main area by 50%
 st.set_page_config(layout="wide")
 
+# Upload Wastage and Maintenance files.
 
 with st.sidebar:
     st.markdown("")
@@ -31,7 +32,7 @@ with st.sidebar:
     st.subheader('**How to Use:**')
     st.write('''
 
-    1. 📄 Upload Wastage and Maintenance files.
+    1. 📄 Upload the relevant files in CSV format (e.g., maintenance data, customer data, sales data, etc.)
     2. Wait for the files to upload.
     3. Ask Questions! 📊
 
@@ -42,17 +43,17 @@ with st.sidebar:
 
 
 st.title('🤖 Data to Insights')
-st.markdown("#### Unlock Actionable Insights from Your Machine Data")
+st.markdown("#### Unlock Actionable Insights from Your Process Data")
 st.markdown("")
 st.markdown("")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    uploaded_file_w = st.file_uploader("**Upload Wastage File (.csv)**", type=("csv"))
+    uploaded_file_w = st.file_uploader("**Upload File (e.g., wastage data) (.csv)**", type=("csv"))
 
 with col2:
-    uploaded_file_m = st.file_uploader("**Upload Maintenance File (.csv)**", type=("csv"))
+    uploaded_file_m = st.file_uploader("**Upload File (e.g., maintenance data) (.csv)**", type=("csv"))
 
 if uploaded_file_w and uploaded_file_m:
     # Read the uploaded files
@@ -148,7 +149,7 @@ agent = create_sql_agent(llm, db=db, prompt=full_prompt, tools=[date_tool, test_
 
 
 if "messages" not in st.session_state or st.sidebar.button("New Conversation"):
-    st.session_state["messages"] = [{"role": "assistant", "content": "Hi Nithin, how can I help you today?"}]
+    st.session_state["messages"] = [{"role": "assistant", "content": "Hi User, how can I help you today?"}]
 
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])

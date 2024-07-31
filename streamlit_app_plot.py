@@ -24,6 +24,7 @@ db = SQLDatabase.from_uri("sqlite:///Data.db")
 # Increase the default width of the main area by 50%
 st.set_page_config(layout="wide")
 
+# Upload Wastage and Maintenance files.
 
 with st.sidebar:
     st.markdown("")
@@ -33,7 +34,7 @@ with st.sidebar:
     st.subheader('**How to Use:**')
     st.write('''
 
-    1. 📄 Upload Wastage and Maintenance files.
+    1. 📄 Upload the relevant files in CSV format (e.g., maintenance data, customer data, sales data, etc.)
     2. Wait for the files to upload.
     3. Ask Questions! 📊
 
