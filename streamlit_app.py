@@ -38,9 +38,10 @@ with st.sidebar:
     st.subheader('**How to Use:**')
     st.write('''
 
-    1. 📄 Upload Wastage and Maintenance files.
-    2. Wait for the files to upload.
-    3. Ask Questions! 📊
+    1. 📄 Upload one or two relevant files in CSV format (e.g. maintenance data, customer data, sales data, etc.)
+    2. Example test case: upload wastage data on the left and maintenance data on the right.
+    3. Wait for the files to upload.
+    4. Ask Questions! 📊
 
     ''')
     st.markdown("")
@@ -49,17 +50,17 @@ with st.sidebar:
 
 
 st.title('🤖 Data to Insights')
-st.markdown("#### Unlock Actionable Insights from Your Machine Data")
+st.markdown("#### Unlock Actionable Insights from Your Process Data")
 st.markdown("")
 st.markdown("")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    uploaded_file_1 = st.file_uploader("**Upload File (e.g., wastage data) (.csv)**", type=("csv"))
+    uploaded_file_1 = st.file_uploader("**Upload File 1 (e.g. wastage, customer, sales or finance data) (.csv)**", type=("csv"))
 
 with col2:
-    uploaded_file_2 = st.file_uploader("**Upload File (e.g., maintenance data) (.csv)**", type=("csv"))
+    uploaded_file_2 = st.file_uploader("**Upload File 2 (e.g. maintenance, customer, sales or finance data) (.csv)**", type=("csv"))
 
 # Connect to the SQLite database
 conn = sqlite3.connect('Data.db')
@@ -167,12 +168,12 @@ agent = create_sql_agent(llm, db=db, prompt=full_prompt, agent_type="openai-tool
 
 
 if "messages" not in st.session_state or st.sidebar.button("New Conversation"):
-    st.session_state["messages"] = [{"role": "assistant", "content": "Hi Nithin, how can I help you today?"}]
+    st.session_state["messages"] = [{"role": "assistant", "content": "Hi, how can I help you today?"}]
 
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
 
-user_query = st.chat_input(placeholder="Ask me anything!")
+user_query = st.chat_input(placeholder="Ask me anything about your data!")
 
 if user_query:
     st.session_state.messages.append({"role": "user", "content": user_query})
