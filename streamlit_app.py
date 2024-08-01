@@ -16,6 +16,13 @@ os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGCHAIN_API_KEY"]
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 
+# Ensure the database is empty at the start of the session
+db_path = 'Data.db'
+if os.path.exists(db_path):
+    os.remove(db_path)
+
+# Connect to the SQLite database (this will create a new, empty database)
+conn = sqlite3.connect(db_path)
 
 # ------------------- Create Sidebar Chat ----------------------
 
@@ -49,28 +56,35 @@ st.markdown("")
 col1, col2 = st.columns(2)
 
 with col1:
-    uploaded_file_w = st.file_uploader("**Upload Wastage File (.csv)**", type=("csv"))
+    uploaded_file_1 = st.file_uploader("**Upload File (e.g., wastage data) (.csv)**", type=("csv"))
 
 with col2:
-    uploaded_file_m = st.file_uploader("**Upload Maintenance File (.csv)**", type=("csv"))
+    uploaded_file_2 = st.file_uploader("**Upload File (e.g., maintenance data) (.csv)**", type=("csv"))
 
-if uploaded_file_w and uploaded_file_m:
-    # Read the uploaded files
-    dfe = pd.read_csv(uploaded_file_w)
-    dfr = pd.read_csv(uploaded_file_m)
+# Connect to the SQLite database
+conn = sqlite3.connect('Data.db')
+
+if uploaded_file_1:
+    # Read the uploaded file
+    dfe = pd.read_csv(uploaded_file_1)
     
-    # Connect to the SQLite database
-    conn = sqlite3.connect('Data.db')
+    # Save dataframe to SQL table
+    dfe.to_sql('File 1', conn, index=False, if_exists='replace')
     
-    # Save dataframes to SQL tables
-    dfe.to_sql('Wastage_Data', conn, index=False, if_exists='replace')
-    dfr.to_sql('Maintenance_Data', conn, index=False, if_exists='replace')
+    st.success("File 1 successfully uploaded and data ready for analysis.")
+
+if uploaded_file_2:
+    # Read the uploaded file
+    dfr = pd.read_csv(uploaded_file_2)
     
-    # Commit and close the connection
-    conn.commit()
-    conn.close()
+    # Save dataframe to SQL table
+    dfr.to_sql('File 2', conn, index=False, if_exists='replace')
     
-    st.success("Files have been successfully uploaded.")
+    st.success("File 2 successfully uploaded and data ready for analysis.")
+
+# Commit and close the connection
+conn.commit()
+conn.close()
 
 
 st.markdown("")
@@ -92,22 +106,17 @@ few_shot_prompt = FewShotPromptTemplate(
     examples=examples,
     example_prompt=example_prompt,
     # prefix="You are a SQL expert. Given a user input, generate the appropriate SQL query.\nHere are some examples:",
-    prefix="""You are an assitant for process engineers. You are an agent designed to interact with a SQL database or use your tools to return the current date or a test response. 
+    prefix="""You are an assitant for process engineers. You are an agent designed to interact with a SQL database.
     Given an input question about data, create a syntactically correct SQLite query to run, then look at the results of the query and return the answer. 
     You can order the results by a relevant column to return the most interesting examples in the database. 
     Never query for all the columns from a specific table, only ask for the relevant columns given the question.,
-    You have access to tools for interacting with the database as well as returning the current date or a test response.
+    You have access to tools for interacting with the database.
     Only use the given tools. Only use the information returned by the tools to construct your final answer.
     You MUST double check your query before executing it. If you get an error while executing a query, rewrite the query and try again.
 
     DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
 
-    When a user asks about a material or item, they are referring to a unique entity from the column 'Copy of Comp MatlGrp Desc' column in the 'Wastage_Data' table with only these values possible: ['Tea Blends', 'ZWIP Default', 'Thermal Transfer Lbl', 'Corrugated & Display', 'Web', 'Misc Pkg Materials', 'ASSO BRAND DELTA MFG', '0', 'Cartons', 'Tea Tags', 'PS Labels', 'Poly Laminations', 'ZFIN DEFAULT', 'Plastic Bags']  
-    When asked about 'downtime', 'reasons' or 'maintenance' query the 'Maintenance_Data' table.
-    'Reasons' for downtime and maintenance are provided as Level 2 Reasons in the Maintenance_Data table in the column 'Level2Reason'.
-    When asked about Lines or, for example, "L1", the lines you can query are only: ['L01 - C24', 'L02 - C24', 'L03 - C24', 'L03A - C24E', 'L04 - C21', 'L05  - C21', 'L19 - T2 Prima', 'L21 - Twinkle', 'L22 - Twinkle Rental', 'L23 - Twinkle 2', 'L24 - Twinkle 3', 'L35 - Fuso Combo 1', 'L36 - Fuso Combo 2']
-
-    If the question does not seem related to the database, the current date or time, or a test_tool, just return "I don't know" as the answer. \nHere are some examples:""",
+    If the question does not seem related to the database, just return "I don't know" as the answer. \nHere are some examples:""",
     suffix="User input: {input}\nSQL query: {agent_scratchpad}\n",
     input_variables=["input", "agent_scratchpad"]
 )
@@ -119,32 +128,42 @@ full_prompt = ChatPromptTemplate.from_messages([
     MessagesPlaceholder("agent_scratchpad"),
 ])
 
-# Custom function to get the current date
-def get_current_date():
-    return datetime.now().strftime("%Y-%m-%d")
 
-# Create a tool from the custom function
-date_tool = Tool(
-    name="get_current_date",
-    func=get_current_date,
-    description="Get the current date"
-)
+# OLD PROMPT
+    # When a user asks about a material or item, they are referring to a unique entity from the column 'Copy of Comp MatlGrp Desc' column in the 'Wastage_Data' table with only these values possible: ['Tea Blends', 'ZWIP Default', 'Thermal Transfer Lbl', 'Corrugated & Display', 'Web', 'Misc Pkg Materials', 'ASSO BRAND DELTA MFG', '0', 'Cartons', 'Tea Tags', 'PS Labels', 'Poly Laminations', 'ZFIN DEFAULT', 'Plastic Bags']  
+    # When asked about 'downtime', 'reasons' or 'maintenance' query the 'Maintenance_Data' table.
+    # 'Reasons' for downtime and maintenance are provided as Level 2 Reasons in the Maintenance_Data table in the column 'Level2Reason'.
+    # When asked about Lines or, for example, "L1", the lines you can query are only: ['L01 - C24', 'L02 - C24', 'L03 - C24', 'L03A - C24E', 'L04 - C21', 'L05  - C21', 'L19 - T2 Prima', 'L21 - Twinkle', 'L22 - Twinkle Rental', 'L23 - Twinkle 2', 'L24 - Twinkle 3', 'L35 - Fuso Combo 1', 'L36 - Fuso Combo 2']
 
-# Simple test function
-def simple_test_tool():
-    return "Test tool response for Ian"
 
-# Create a tool from the simple test function
-test_tool_Ian = Tool(
-    name="simple_test_tool",
-    func=simple_test_tool,
-    description="Returns a test response"
-)
+
+# # Custom function to get the current date
+# def get_current_date():
+#     return datetime.now().strftime("%Y-%m-%d")
+
+# # Create a tool from the custom function
+# date_tool = Tool(
+#     name="get_current_date",
+#     func=get_current_date,
+#     description="Get the current date"
+# )
+
+# # Simple test function
+# def simple_test_tool():
+#     return "Test tool response for Ian"
+
+# # Create a tool from the simple test function
+# test_tool_Ian = Tool(
+#     name="simple_test_tool",
+#     func=simple_test_tool,
+#     description="Returns a test response"
+# )
 
 # Initialize the LLM and create the SQL agent
 llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
 db = SQLDatabase.from_uri("sqlite:///Data.db")
-agent = create_sql_agent(llm, db=db, prompt=full_prompt, tools=[date_tool, test_tool_Ian], agent_type="openai-tools", verbose=False)
+# agent = create_sql_agent(llm, db=db, prompt=full_prompt, tools=[date_tool, test_tool_Ian], agent_type="openai-tools", verbose=True)
+agent = create_sql_agent(llm, db=db, prompt=full_prompt, agent_type="openai-tools", verbose=True)
 
 
 if "messages" not in st.session_state or st.sidebar.button("New Conversation"):
@@ -170,77 +189,4 @@ if user_query:
         
         st.session_state.messages.append({"role": "assistant", "content": response})
         st.write(response)
-
-
-
-
-
-
-# # def get_fewshot_agent_chain(): 
-    
-#     # llm & db setup
-# llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
-#     # db = SQLDatabase.from_uri("sqlite:///Data.db")
-
-#     # # create few shot prompts, their embeddings and store in Chromadb
-#     # embeddings = OpenAIEmbeddings()
-    
-#     # # create example selector which chooses k= examples to include in the agent's prompt
-#     # example_selector = SemanticSimilarityExampleSelector.from_examples(
-#     #     few_shots_ag,
-#     #     embeddings,
-#     #     Chroma,
-#     #     k=3,
-#     #     input_keys=["input"],
-#     # )
-
-
-#     # # Now we can create our FewShotPromptTemplate, which takes our example selector, an example prompt for formatting each example, and a string prefix and suffix to put before and after our formatted examples:
-#     # from langchain_core.prompts import (
-#     #     ChatPromptTemplate,
-#     #     FewShotPromptTemplate,
-#     #     MessagesPlaceholder,
-#     #     PromptTemplate,
-#     #     SystemMessagePromptTemplate,
-#     # )
-
-#     system_prefix = """You are an agent designed to interact with a SQL database.
-#     Given an input question, create a syntactically correct {dialect} query to run, then look at the results of the query and return the answer.
-#     Unless the user specifies a specific number of examples they wish to obtain, always limit your query to at most {top_k} results.
-#     You can order the results by a relevant column to return the most interesting examples in the database.
-#     Never query for all the columns from a specific table, only ask for the relevant columns given the question.
-#     You have access to tools for interacting with the database.
-#     Only use the given tools. Only use the information returned by the tools to construct your final answer.
-#     You MUST double check your query before executing it. If you get an error while executing a query, rewrite the query and try again.
-
-#     DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
-
-#     If the question does not seem related to the database, just return "I don't know" as the answer.
-
-# #     # Here are some examples of user inputs and their corresponding SQL queries:"""
-
-#     # few_shot_prompt = FewShotPromptTemplate(
-#     #     example_selector=example_selector,
-#     #     example_prompt=PromptTemplate.from_template(
-#     #         "User input: {input}\nSQL query: {query}"
-#     #     ),
-#     #     input_variables=["input", "dialect", "top_k"],
-#     #     prefix=system_prefix,
-#     #     suffix="",
-#     # )
-
-#     # # our full prompt should be a chat prompt with a human message template and an agent_scratchpad MessagesPlaceholder.
-#     # full_prompt = ChatPromptTemplate.from_messages(
-#     #     [
-#     #         SystemMessagePromptTemplate(prompt=few_shot_prompt),
-#     #         ("human", "{input}"),
-#     #         MessagesPlaceholder("agent_scratchpad"),
-#     #     ]
-#     # )
-
-#     # agent_executor = create_sql_agent(llm, db=db, prompt=full_prompt, agent_type="openai-tools", verbose=True)
-#     # return agent_executor
-
-
-
 

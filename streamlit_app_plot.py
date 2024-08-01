@@ -19,7 +19,8 @@ os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGCHAIN_API_KEY"]
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 
 # Initialize the database
-db = SQLDatabase.from_uri("sqlite:///Data.db")
+# db = SQLDatabase.from_uri("sqlite:///Data.db")
+
 
 # Increase the default width of the main area by 50%
 st.set_page_config(layout="wide")
@@ -51,28 +52,35 @@ st.markdown("")
 col1, col2 = st.columns(2)
 
 with col1:
-    uploaded_file_w = st.file_uploader("**Upload Wastage File (.csv)**", type=("csv"))
+    uploaded_file_1 = st.file_uploader("**Upload File (e.g., wastage data) (.csv)**", type=("csv"))
 
 with col2:
-    uploaded_file_m = st.file_uploader("**Upload Maintenance File (.csv)**", type=("csv"))
+    uploaded_file_2 = st.file_uploader("**Upload File (e.g., maintenance data) (.csv)**", type=("csv"))
 
-if uploaded_file_w and uploaded_file_m:
-    # Read the uploaded files
-    dfe = pd.read_csv(uploaded_file_w)
-    dfr = pd.read_csv(uploaded_file_m)
+# Connect to the SQLite database
+conn = sqlite3.connect('Data.db')
+
+if uploaded_file_1:
+    # Read the uploaded file
+    dfe = pd.read_csv(uploaded_file_1)
     
-    # Connect to the SQLite database
-    conn = sqlite3.connect('Data.db')
+    # Save dataframe to SQL table
+    dfe.to_sql('File 1', conn, index=False, if_exists='replace')
     
-    # Save dataframes to SQL tables
-    dfe.to_sql('Wastage_Data', conn, index=False, if_exists='replace')
-    dfr.to_sql('Maintenance_Data', conn, index=False, if_exists='replace')
+    st.success("File 1 successfully uploaded and data ready for analysis.")
+
+if uploaded_file_2:
+    # Read the uploaded file
+    dfr = pd.read_csv(uploaded_file_2)
     
-    # Commit and close the connection
-    conn.commit()
-    conn.close()
+    # Save dataframe to SQL table
+    dfr.to_sql('File 2', conn, index=False, if_exists='replace')
     
-    st.success("Files have been successfully uploaded.")
+    st.success("File 2 successfully uploaded and data ready for analysis.")
+
+# Commit and close the connection
+conn.commit()
+conn.close()
 
 
 st.markdown("")
@@ -211,7 +219,8 @@ if user_query:
         st_cb = StreamlitCallbackHandler(st.container())
         
         # Construct a dictionary with required inputs
-        inputs = {"query": user_query, "x": "column_x", "y": "column_y", "kind": "line"}
+        # inputs = {"query": user_query, "x": "column_x", "y": "column_y", "kind": "line"}
+        inputs = {"input": f"query: {user_query}, x: column_x, y: column_y, kind: line"}
         
         # Call the coordinating agent's run method with the inputs dictionary
         response = agent_executor.run(callbacks=[st_cb], **inputs)
